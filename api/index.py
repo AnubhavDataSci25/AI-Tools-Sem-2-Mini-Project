@@ -3,7 +3,8 @@ from flask import Flask, request, jsonify, render_template
 from collections import deque
 import heapq
 
-app = Flask(__name__)
+# app = Flask(__name__)
+app = Flask(__name__, template_folder="../templates")
 
 # --- Graph Data Configuration ---
 # Nodes with their heuristic values (estimated distance to goal 'G')
@@ -184,7 +185,8 @@ def search():
     
     return jsonify({'error': 'Path not found'}), 404
 
-if __name__ == '__main__':
-    # Default Flask behavior: listens on http://127.0.0.1:5000
-    print("🚑 Ambulance AI Router starting...")
-    app.run(debug=True, port=5000)
+# if __name__ == '__main__':
+#     # Default Flask behavior: listens on http://127.0.0.1:5000
+#     print("🚑 Ambulance AI Router starting...")
+#     app.run(debug=True, port=5000)
+app = app
