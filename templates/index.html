@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Ambulance AI Router</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .node { transition: all 0.2s; }
+        .path-line { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: dash 2s forwards; }
+        @keyframes dash { to { stroke-dashoffset: 0; } }
+    </style>
+</head>
+<body class="p-4">
+    <div class="max-w-6xl mx-auto">
+        <header class="bg-white p-6 rounded-2xl shadow-sm mb-6 border border-slate-200 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">🚑 Ambulance AI Router <span class="text-sm font-normal text-slate-400 font-mono">(Python/Flask)</span></h1>
+            </div>
+            <div id="status" class="text-xs font-bold uppercase py-1 px-3 bg-green-100 text-green-700 rounded-full">Backend Connected</div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <h2 class="font-bold text-slate-700">Settings</h2>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Start Node</label>
+                    <select id="startNode" class="w-full p-2 border rounded-lg bg-slate-50"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Goal Node</label>
+                    <select id="goalNode" class="w-full p-2 border rounded-lg bg-slate-50"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Algorithm</label>
+                    <select id="algorithm" class="w-full p-2 border rounded-lg bg-slate-50">
+                        <option value="BFS">BFS (Breadth First)</option>
+                        <option value="DFS">DFS (Depth First)</option>
+                        <option value="BestFS">Best-First Search</option>
+                        <option value="AStar">A* Search</option>
+                    </select>
+                </div>
+                <button onclick="computeRoute()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-red-100 hover:bg-red-700 transition-colors">Compute Route</button>
+            </div>
+
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden" style="height: 450px;">
+                    <svg id="map-svg" width="100%" height="100%" class="absolute top-0 left-0"></svg>
+                    <div id="nodes-layer" class="relative w-full h-full pointer-events-none"></div>
+                </div>
+
+                <div id="results" class="hidden bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase">Path Found</p>
+                        <p id="path-text" class="text-lg font-bold text-red-600"></p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase">Total Cost</p>
+                        <p id="cost-text" class="text-lg font-bold text-slate-800"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const nodes = {{ nodes_json|safe }};
+        const edges = {{ edges_json|safe }};
+        const svg = document.getElementById('map-svg');
+        const nodesLayer = document.getElementById('nodes-layer');
+
+        function init() {
+            const startSel = document.getElementById('startNode');
+            const goalSel = document.getElementById('goalNode');
+            Object.keys(nodes).sort().forEach(id => {
+                startSel.add(new Option(`${id} - ${nodes[id].label}`, id));
+                goalSel.add(new Option(`${id} - ${nodes[id].label}`, id));
+            });
+            startSel.value = 'A';
+            goalSel.value = 'G';
+            drawMap();
+        }
+
+        function drawMap(highlightPath = []) {
+            svg.innerHTML = '';
+            nodesLayer.innerHTML = '';
+
+            // Draw Connections
+            edges.forEach(e => {
+                const n1 = nodes[e[0]];
+                const n2 = nodes[e[1]];
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", n1.x); line.setAttribute("y1", n1.y);
+                line.setAttribute("x2", n2.x); line.setAttribute("y2", n2.y);
+                line.setAttribute("stroke", "#e2e8f0");
+                line.setAttribute("stroke-width", "3");
+                svg.appendChild(line);
+            });
+
+            // Draw Highlighted Path
+            if (highlightPath.length > 1) {
+                for(let i=0; i<highlightPath.length-1; i++){
+                    const n1 = nodes[highlightPath[i]];
+                    const n2 = nodes[highlightPath[i+1]];
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("x1", n1.x); line.setAttribute("y1", n1.y);
+                    line.setAttribute("x2", n2.x); line.setAttribute("y2", n2.y);
+                    line.setAttribute("stroke", "#ef4444");
+                    line.setAttribute("stroke-width", "5");
+                    line.setAttribute("class", "path-line");
+                    svg.appendChild(line);
+                }
+            }
+
+            // Draw Nodes
+            Object.keys(nodes).forEach(id => {
+                const n = nodes[id];
+                const el = document.createElement('div');
+                el.className = `absolute w-10 h-10 -ml-5 -mt-5 rounded-full border-4 flex items-center justify-center text-xs font-bold shadow-sm transition-all ${highlightPath.includes(id) ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-slate-200 text-slate-500'}`;
+                el.style.left = n.x + 'px';
+                el.style.top = n.y + 'px';
+                el.innerText = id;
+                nodesLayer.appendChild(el);
+            });
+        }
+
+        async function computeRoute() {
+            const data = {
+                start: document.getElementById('startNode').value,
+                goal: document.getElementById('goalNode').value,
+                algorithm: document.getElementById('algorithm').value
+            };
+
+            const res = await fetch('/search', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+
+            if (result.error) {
+                alert(result.error);
+            } else {
+                drawMap(result.path);
+                document.getElementById('results').classList.remove('hidden');
+                document.getElementById('path-text').innerText = result.path.join(' → ');
+                document.getElementById('cost-text').innerText = result.cost + ' units';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
